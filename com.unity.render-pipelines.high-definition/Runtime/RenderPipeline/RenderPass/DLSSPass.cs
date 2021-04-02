@@ -596,8 +596,8 @@ namespace UnityEngine.Rendering.HighDefinition
                     dynamicResolutionSettings.maxPercentage = Mathf.Min((float)optimalSettings.MaxWidth / finalViewport.width, (float)optimalSettings.MaxHeight / finalViewport.height);
                     dynamicResolutionSettings.minPercentage = Mathf.Max((float)optimalSettings.MinWidth / finalViewport.width, (float)optimalSettings.MinHeight / finalViewport.height);
                     m_SelectedCameraKey = cameraKey;
-                    //TODO work on priority API so we can have an easy way to replace / re-record the scaling.
-                    //DynamicResolutionHandler.SetDynamicResScaler(ScaleFn, DynamicResScalePolicyType.ReturnsPercentage);
+                    DynamicResolutionHandler.SetSystemDynamicResScaler(ScaleFn, DynamicResScalePolicyType.ReturnsPercentage);
+                    DynamicResolutionHandler.SetActiveDynamicScalerSlot(DynamicResScalerSlot.System);
                 }
 
                 foreach (var view in cameraState.ViewStates)
@@ -648,8 +648,17 @@ namespace UnityEngine.Rendering.HighDefinition
                 return;
 
             var dlssViewData = new DlssViewData();
-            dlssViewData.perfQuality = (Unity.External.NVIDIA.NVSDK_NGX_PerfQuality_Value)parameters.drsSettings.DLSSPerfQualitySetting;
-            dlssViewData.sharpness  = parameters.drsSettings.DLSSSharpness;
+
+            dlssViewData.perfQuality =
+                (Unity.External.NVIDIA.NVSDK_NGX_PerfQuality_Value)(
+                    parameters.hdCamera.CanUseDLSSParameter(HDAdditionalCameraData.OverrideDLSSParametersFlags.QualitySettings)
+                    ? parameters.hdCamera.deepLearningSuperSamplingQuality
+                    : parameters.drsSettings.DLSSPerfQualitySetting);
+
+            dlssViewData.sharpness = parameters.hdCamera.CanUseDLSSParameter(HDAdditionalCameraData.OverrideDLSSParametersFlags.Sharpening)
+                ? parameters.hdCamera.deepLearningSuperSamplingSharpening
+                : parameters.drsSettings.DLSSSharpness;
+
             dlssViewData.inputRes  = new Resolution() { width = (uint)parameters.hdCamera.actualWidth, height = (uint)parameters.hdCamera.actualHeight };
             dlssViewData.outputRes = new Resolution() { width = (uint)DynamicResolutionHandler.instance.finalViewport.x, height = (uint)DynamicResolutionHandler.instance.finalViewport.y };
             dlssViewData.jitterX = -parameters.hdCamera.taaJitter.x;

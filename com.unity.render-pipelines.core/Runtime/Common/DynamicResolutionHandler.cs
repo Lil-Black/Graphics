@@ -25,6 +25,18 @@ namespace UnityEngine.Rendering
         ReturnsMinMaxLerpFactor
     }
 
+    /// <summary>
+    /// The source slots for dynamic resolution scaler. Defines registers were the scalers assigned are stored. By default the User one is always used
+    /// </summary>
+    public enum DynamicResScalerSlot
+    {
+        /// <summary> Scaler slot set by the function SetDynamicResScaler</summary>
+        User,
+        /// <summary> Scaler slot set by the function SetSystemDynamicResScaler</summary>
+        System,
+        /// <summary> total number of scaler slots </summary>
+        Count
+    }
 
     /// <summary>
     /// The class responsible to handle dynamic resolution.
@@ -63,8 +75,18 @@ namespace UnityEngine.Rendering
             filter = DynamicResUpscaleFilter.Bilinear;
         }
 
-        private static DynamicResScalePolicyType s_ScalerType = DynamicResScalePolicyType.ReturnsMinMaxLerpFactor;
-        private static PerformDynamicRes s_DynamicResMethod = DefaultDynamicResMethod;
+        private struct ScalerContainer
+        {
+            public DynamicResScalePolicyType type;
+            public PerformDynamicRes method;
+        }
+
+        private static DynamicResScalerSlot s_ActiveScalerSlot = DynamicResScalerSlot.User;
+        private static ScalerContainer[] s_ScalerContainers = new ScalerContainer[(int)DynamicResScalerSlot.Count]
+        {
+            new ScalerContainer() { type = DynamicResScalePolicyType.ReturnsMinMaxLerpFactor, method = DefaultDynamicResMethod },
+            new ScalerContainer() { type = DynamicResScalePolicyType.ReturnsMinMaxLerpFactor, method = DefaultDynamicResMethod }
+        };
 
         // Debug
         private Vector2Int cachedOriginalSize;
@@ -257,14 +279,32 @@ namespace UnityEngine.Rendering
         }
 
         /// <summary>
-        /// Set the scaler method used to drive dynamic resolution.
+        /// Set the scaler method used to drive dynamic resolution by the user.
         /// </summary>
         /// <param name="scaler">The delegate used to determine the resolution percentage used by the dynamic resolution system.</param>
         /// <param name="scalerType">The type of scaler that is used, this is used to indicate the return type of the scaler to the dynamic resolution system.</param>
         static public void SetDynamicResScaler(PerformDynamicRes scaler, DynamicResScalePolicyType scalerType = DynamicResScalePolicyType.ReturnsMinMaxLerpFactor)
         {
-            s_ScalerType = scalerType;
-            s_DynamicResMethod = scaler;
+            s_ScalerContainers[(int)DynamicResScalerSlot.User] = new ScalerContainer() { type = scalerType, method = scaler};
+        }
+
+        /// <summary>
+        /// Set the scaler method used to drive dynamic resolution internally from the SRP. This function should only be called by SRPs
+        /// </summary>
+        /// <param name="scaler">The delegate used to determine the resolution percentage used by the dynamic resolution system.</param>
+        /// <param name="scalerType">The type of scaler that is used, this is used to indicate the return type of the scaler to the dynamic resolution system.</param>
+        static public void SetSystemDynamicResScaler(PerformDynamicRes scaler, DynamicResScalePolicyType scalerType = DynamicResScalePolicyType.ReturnsMinMaxLerpFactor)
+        {
+            s_ScalerContainers[(int)DynamicResScalerSlot.System] = new ScalerContainer() { type = scalerType, method = scaler };
+        }
+
+        /// <summary>
+        /// Set the active dynamic scaler.
+        /// </summary>
+        /// <param name="source">The scaler to be selected and used by the runtime.</param>
+        static public void SetActiveDynamicScalerSlot(DynamicResScalerSlot slot)
+        {
+            s_ActiveScalerSlot = slot;
         }
 
         /// <summary>
@@ -331,15 +371,16 @@ namespace UnityEngine.Rendering
 
             if (!m_ForcingRes)
             {
-                if (s_ScalerType == DynamicResScalePolicyType.ReturnsMinMaxLerpFactor)
+                ref ScalerContainer scaler = ref s_ScalerContainers[(int)s_ActiveScalerSlot];
+                if (scaler.type == DynamicResScalePolicyType.ReturnsMinMaxLerpFactor)
                 {
-                    float currLerp = s_DynamicResMethod();
+                    float currLerp = scaler.method();
                     float lerpFactor = Mathf.Clamp(currLerp, 0.0f, 1.0f);
                     m_CurrentFraction = Mathf.Lerp(m_MinScreenFraction, m_MaxScreenFraction, lerpFactor);
                 }
-                else if (s_ScalerType == DynamicResScalePolicyType.ReturnsPercentage)
+                else if (scaler.type == DynamicResScalePolicyType.ReturnsPercentage)
                 {
-                    float percentageRequested = Mathf.Max(s_DynamicResMethod(), 5.0f);
+                    float percentageRequested = Mathf.Max(scaler.method(), 5.0f);
                     m_CurrentFraction = Mathf.Clamp(percentageRequested / 100.0f, m_MinScreenFraction, m_MaxScreenFraction);
                 }
             }

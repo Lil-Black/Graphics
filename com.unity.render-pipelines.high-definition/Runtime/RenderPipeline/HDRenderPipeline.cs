@@ -956,8 +956,9 @@ namespace UnityEngine.Rendering.HighDefinition
 
             if (m_DLSSPass != null && hdCam.cameraCanRenderDLSS)
             {
-                bool useOptimalSettings = m_Asset.currentPlatformRenderPipelineSettings.dynamicResolutionSettings.DLSSUseOptimalSettings
-                    && hdCam.allowDeepLearningSuperSamplingOptimalSettings;
+                bool useOptimalSettings = hdCam.CanUseDLSSParameter(HDAdditionalCameraData.OverrideDLSSParametersFlags.UseOptimalSettings)
+                    ? hdCam.allowDeepLearningSuperSamplingOptimalSettings
+                    : m_Asset.currentPlatformRenderPipelineSettings.dynamicResolutionSettings.DLSSUseOptimalSettings;
                 m_DLSSPass.SetupAutomaticDRSScaling(useOptimalSettings, camera, xrPass, ref outDrsSettings);
             }
         }
@@ -1133,6 +1134,8 @@ namespace UnityEngine.Rendering.HighDefinition
                     bool cameraRequestedDynamicRes = false;
                     HDAdditionalCameraData hdCam = null;
                     var drsSettings = m_Asset.currentPlatformRenderPipelineSettings.dynamicResolutionSettings;
+
+                    DynamicResolutionHandler.SetActiveDynamicScalerSlot(DynamicResScalerSlot.User);
                     if (camera.TryGetComponent<HDAdditionalCameraData>(out hdCam))
                     {
                         cameraRequestedDynamicRes = hdCam.allowDynamicResolution && camera.cameraType == CameraType.Game;
